@@ -1,8 +1,8 @@
-from flask import Flask, request, render_template_string, redirect, flash
+from flask import Flask, request, render_template_string, flash, redirect, url_for
 from instagrapi import Client
 import time
 
-# Flask app initialization
+# Flask app setup
 app = Flask(__name__)
 app.secret_key = "your_secret_key"
 
@@ -13,95 +13,123 @@ HTML_TEMPLATE = '''
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Instagram Group Nickname Bot</title>
+    <title>Instagram Group Welcomer</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             background: linear-gradient(to right, #4facfe, #00f2fe);
-            color: white;
-            text-align: center;
-            padding: 50px;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
         }
         .container {
-            max-width: 400px;
-            margin: 0 auto;
-            background: rgba(255, 255, 255, 0.1);
+            background-color: white;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
         }
         input, button {
             width: 100%;
             padding: 10px;
-            margin: 10px 0;
-            border: none;
+            margin-top: 10px;
+            border: 1px solid #ddd;
             border-radius: 5px;
             font-size: 16px;
         }
-        input {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-        }
         button {
-            background: #4caf50;
+            background-color: #007bff;
             color: white;
+            border: none;
             cursor: pointer;
+            font-weight: bold;
         }
         button:hover {
-            background: #45a049;
+            background-color: #0056b3;
+        }
+        .message {
+            color: red;
+            font-size: 14px;
+            text-align: center;
+        }
+        .success {
+            color: green;
+            font-size: 14px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Instagram Nickname Bot</h1>
-        <form method="POST">
-            <input type="text" name="username" placeholder="Instagram Username" required>
-            <input type="password" name="password" placeholder="Instagram Password" required>
-            <input type="text" name="group_id" placeholder="Group Chat ID" required>
-            <input type="text" name="nickname" placeholder="New Nickname for Members" required>
-            <button type="submit">Update Nicknames</button>
+        <h1>Group Welcomer</h1>
+        <form action="/" method="POST">
+            <label for="username">Instagram Username:</label>
+            <input type="text" id="username" name="username" placeholder="Enter your username" required>
+            
+            <label for="password">Instagram Password:</label>
+            <input type="password" id="password" name="password" placeholder="Enter your password" required>
+            
+            <label for="group_id">Target Group Chat ID:</label>
+            <input type="text" id="group_id" name="group_id" placeholder="Enter group chat ID" required>
+            
+            <label for="welcome_message">Welcome Message:</label>
+            <input type="text" id="welcome_message" name="welcome_message" placeholder="Enter welcome message" required>
+            
+            <button type="submit">Send Welcome</button>
         </form>
     </div>
 </body>
 </html>
 '''
 
+# Route for the form
 @app.route("/", methods=["GET", "POST"])
-def change_nicknames():
+def send_welcome():
     if request.method == "POST":
-        # Fetch form data
-        username = request.form["username"]
-        password = request.form["password"]
-        group_id = request.form["group_id"]
-        nickname = request.form["nickname"]
-
         try:
+            # Get form data
+            username = request.form["username"]
+            password = request.form["password"]
+            group_id = request.form["group_id"]
+            welcome_message = request.form["welcome_message"]
+
             # Log in to Instagram
-            client = Client()
-            client.login(username, password)
-            flash("Logged in successfully!", "success")
+            cl = Client()
+            flash("Logging into Instagram...", "info")
+            cl.login(username, password)
+            flash("Login successful!", "success")
 
-            # Fetch the group chat
-            group = client.direct_threads(thread_ids=[group_id])[0]
-            user_ids = [user.pk for user in group.users]
+            # Fetch group members
+            group_info = cl.direct_thread(group_id)
+            member_usernames = [user.username for user in group_info.users]
 
-            # Change nickname for each member
-            for user_id in user_ids:
-                client.direct_thread_update_user_nickname(
-                    thread_id=group_id, 
-                    user_id=user_id, 
-                    nickname=nickname
-                )
-                flash(f"Changed nickname for user {user_id} to {nickname}", "success")
-                time.sleep(2)  # Avoid rate limits
+            # Create a message mentioning all members
+            mentions = " ".join([f"@{user}" for user in member_usernames])
+            final_message = f"{welcome_message}\n{mentions}"
 
-            flash("Nicknames updated successfully!", "success")
+            # Send the message
+            cl.direct_send(final_message, thread_ids=[group_id])
+            flash("Welcome message sent successfully!", "success")
         except Exception as e:
-            flash(f"Error: {e}", "danger")
-            return redirect("/")
+            flash(f"An error occurred: {e}", "danger")
+        return redirect(url_for("send_welcome"))
 
     return render_template_string(HTML_TEMPLATE)
 
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+            
